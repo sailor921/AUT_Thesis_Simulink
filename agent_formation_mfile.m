@@ -3,7 +3,8 @@ clear
 clc
 
 %%
-%This simulation use for consensus with cyclic graph%
+% **In this simulation we want to  achieve formation**
+
 %Variables
 %Simulation time
 time_steps = 100;
@@ -16,15 +17,23 @@ N = 3;
 %Adjacency Matrix
 A = [zeros(N-1,1) , eye(N-1); ones(1,1) , zeros(1, N-1)];
 
+%Leader Variables
+% Pleader = ones(2,1);
+% thetaleader= 0;
+
 %Position Vectors
 P = zeros(2, N, time_steps+1);  %X and y array
 Theta = zeros(1, N, time_steps+1);  %theta array
 
 %Random inialization of position and orentation
-alpha = N;
+alpha = 10;
 radious_agent = sqrt(3)/6 * alpha;
 P(:, :, 1) = radious_agent * rand(2, N);
 Theta(:,:,1) = alpha * rand(1,1);
+
+%Formation Variables
+kp = 10;
+Pstar = [1, 2, 3; 1, 2, 1]; %Desired position of agents
 
 %Velocity Vectos
 %This sould not here because this is the output of functions
@@ -38,7 +47,7 @@ iteration = 1;
 
 while iteration <= time_steps
     %Controlles 
-    [U, W] = controller(P(:,:,iteration), Theta(:,:,iteration), A);
+    [U, W] = controller(P(:,:,iteration), Theta(:,:,iteration), A, Pstar,kp);
 
     %Derivative variables, these are velocities of agents
     [P_dot, Theta_dot] = agents(P(:,:,iteration), Theta(:,:,iteration), U, W);
@@ -53,28 +62,29 @@ end
 %%
 %Plot
 
-figure 
+figure
 hold on
 grid on
 grid minor
 
-for k = 1:time_steps/10
+for k = 1:time_steps
     for i = 1:N
         plot(P(1, i, k), P(2, i, k), 'ro')
-        hold on
-%         plot(Theta(:,:,k), 'b^')
-        axis([-1 1 -1 1])
+
         pause(0)
+
     end 
+
     pause(0)
 end
 
 figure
-axis equal
 plot(reshape(P(1,:,:),[N, time_steps+1]).', reshape(P(2,:,:),[N, time_steps+1]).')
 hold on
 plot(P(1, :, time_steps + 1), P(2, :, time_steps + 1), 'k^')    %Final position
 plot(P(1, :, 1), P(2, :, 1), 'ko')  %Initial position
+hold on 
+plot(Pstar(1,:), Pstar(2,:), 'r*')
 grid on 
 grid minor
 
@@ -100,16 +110,21 @@ function [P_dot, Theta_dot] = agents(P, Theta, U, W)
 
 end
 
-function [U, W] = controller(P, Theta, A)
+function [U, W] = controller(P, Theta, A, Pstar, kp)
     N = size(P, 2);
     U = zeros(size(P));
     W = zeros(size(Theta));
+%     Pleader = ones(2,1);
+%     thetaleader= 0;
 
     for i = 1:N
+        U(:, i) = kp * (Pstar(:, i) - P(:, i));
 
         for j = 1:N
-            U(:, i) = U(:, i) + A(i, j) * (P(:, j) - P(:, i));
+
+            U(:, i) = U(:, i) + A(i, j) * (P(:, j) - P(:, i) - Pstar(:, j) + Pstar(:, i));
             W(:, i) = W(:, i) + A(i, j) * (Theta(:, j) - Theta(:, i));
+
         end
 
     end
