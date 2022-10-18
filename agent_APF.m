@@ -5,6 +5,7 @@ clc
 % **The Artificial Potencial Field path planning with single agent**
 
 % Varaibles
+global Pgoal Pobstacle katt krep d rho_obstacle
 
 %Simulation time
 time_steps = 1000;
@@ -16,30 +17,30 @@ P = zeros(2, 1, time_steps+1);
 P(:, :, 1) = [1; 3];
 
 %Create Obstacle
-Pobstacle = [5; 5];
+numobs = 3;
+Pobstacle = zeros(2, numobs);
+Pobstacle(:, 1) = [5; 5];
+Pobstacle(:, 2) = [3; 10];
+% Pobstacle(:, 3) = [8; 8];   %Good
+Pobstacle(:, 3) = [7; 8]; %Local minumum problem can solve with change of katt and krep
+Pobstacle(:, 4) = [3; 5];
+Pobstacle(:, 5) = [6; 2];
 
 %Create goal point
 Pgoal = [10; 10];
 
 %APF variables
-katt = -10;
-krep = -50;
+katt = -25;%-10;
+krep = -20;%-50;
 d = 0.2;
 rho_obstacle = 10;
-% these variables test for plot
-potencial_vec = zeros(1, 1, time_steps+1);
-attpot_vec = [];
-reppot_vec = [];
-att_vec = [];
-rep_vec = [];
 
 %%
 %Simulation 
-
 Error = 1;
 iteration = 1;
 
-while iteration <= time_steps
+while iteration<= time_steps
 
     %Controller
     [U] = controller(P(:, :, iteration), Pgoal, katt, d, Pobstacle, rho_obstacle, krep);
@@ -51,12 +52,6 @@ while iteration <= time_steps
     %Repulsive Potencial
     [reppot] = repulsive_pot(P(:, :, iteration), Pobstacle, rho_obstacle, krep);
 
-    %test
-    [att] = attractive(P(:, :, iteration), Pgoal, katt, d);
-    [rep] = repulsive(P(:, :, iteration), Pobstacle, rho_obstacle, krep);
-    att_vec = [att_vec, att];
-    rep_vec = [rep_vec, rep];
-    
     %Derivative variables, these are velocities of agents
     [pdot] = agent(P(:, :, iteration), U);
    
@@ -64,26 +59,21 @@ while iteration <= time_steps
     %Update Position of agent
     P(:, :, iteration+1) = P(:, :, iteration) + tstep * pdot;
     
-    %Update potential vector
-    temppot = attpot + reppot;
-    potencial_vec(:, :, iteration+1) = potencial_vec(:, :, iteration) + temppot;
-    attpot_vec = [attpot_vec, attpot];
-    reppot_vec = [reppot_vec, reppot];
-
     Error = norm(Pgoal - P(:, :, iteration));
 
     iteration = iteration + 1;
 
 end
 
+
 %%
 %Plot
 
-fig = figure('Name', 'Artificial Potencial Field', 'NumberTitle', 'off');
+%Plot trajectory of robot
+fig = figure('Name', 'Artificial Potential Field', 'NumberTitle', 'off');
 hold on
 plot(Pgoal(1, :), Pgoal(2, :), 'k*');
 plot(Pobstacle(1, :), Pobstacle(2, :), 'b>');
-
 axis([-15 15 -15 15])
 grid on 
 grid minor
@@ -92,13 +82,28 @@ for i = 2:time_steps
 
     plot(P(1, :, i), P(2, :, i), 'ro');
     pause(0);
+
 end
 
-% for i = 1:length(size(Pobstacle, 1))
-% 
-%     [plots] = potential_plots(x, y, Pobstacle)
-% 
-% end
+%Plot meshgrid potential
+figure(2)
+
+xx = 0:0.1:12;
+yy = 0:0.1:12;
+
+[X, Y] = meshgrid(xx, yy);
+Z = zeros(size(X));
+
+for i = 1:numel(xx)
+
+    for j = 1:numel(yy)
+        Z(i, j) = potential(X(i, j), Y(i, j));
+    end
+
+end
+%Plot surface of potential
+surf(X, Y, Z)
+
 %%
 %Functions
 
@@ -140,29 +145,37 @@ end
 
 %Repulsive Force
 function [rep] = repulsive(P, Pobstacle, rho_obstacle, krep)
+    rep = 0;
+    for i = 1:size(Pobstacle, 2)
+        
+        dist = P - Pobstacle(:, i);
+        temp = norm(dist);
+        Grad_obstacle = dist/temp;
     
-    dist = P - Pobstacle;
-    temp = norm(dist);
-    Grad_obstacle = dist/temp;
+        if (temp <= rho_obstacle)
+            rep = rep + -krep * (1/temp - 1/rho_obstacle) * (Grad_obstacle)/(temp^2);
+        else
+            rep = [0; 0];
+        end
 
-    if (temp <= rho_obstacle)
-        rep = -krep * (1/temp - 1/rho_obstacle) * (Grad_obstacle)/(temp^2);
-    else
-        rep = [0; 0];
     end
    
 end
 
 %Repulsive Potential
 function [reppot] = repulsive_pot(P, Pobstacle, rho_obstacle, krep)
-    
-    dist = P - Pobstacle;
-    temp = norm(dist);
+    reppot = 0;
+    for i = 1:size(Pobstacle, 2)
 
-    if (temp <= rho_obstacle)
-        reppot = 0.5 * -krep * (1/temp - 1/rho_obstacle);
-    else
-        reppot = 0;
+        dist = P - Pobstacle(:, i);
+        temp = norm(dist);
+    
+        if (temp <= rho_obstacle)
+            reppot = reppot + 0.5 * -krep * (1/temp - 1/rho_obstacle);
+        else
+            reppot = 0;
+        end
+
     end
 
 end
@@ -178,51 +191,14 @@ function [U] = controller(P, Pgoal, katt, d,Pobstacle ,rho_obstacle, krep)
 
 end
 
-%Plotting
-% function [plots] = potential_plots(x, y, Pobstacle)
-%     [xx, yy] = meshgrid(x, y);
-% 
-%     pos1 = sqrt(power((xx - Pobstacle(1, :)), 2) + power((xx - Pobstacle(2, :)), 2));
-% 
-%     for i = 1:numel(x)
-%         for j = 1:numel(y)
-%             if pos1(i, j) > 1.5 && pos1(i, j) <= 0.5
-%                 posf1(i, j) = pos1(i, j).^(-1);
-%             end
-%             if pos1(i, j) >= 5
-%                 posf1(i,j) = 0;
-%             end
-%             if pos1(i,j) <= 1.5
-%                 posf1(i,j) = 1/(1.5);
-%             end
-%         end
-%     end
-%     negd2 = (xx - 102).^2 + (yy - 105).^2 - 0.002;
-%     negd = sqrt(negd2);
-%     neg = negd.^(-1);
-%     zz = posf1 - neg;
-%     figure(2)
-%     title('Potential Fields plot')
-%     xlabel('x')
-%     ylabel('y')
-%     hold on
-%     mesh(real(zz))
-%     pause(1)
-%     figure(3)
-%     title('Quiver plot of the environment')
-%     xlabel('x')
-%     ylabel('y')
-%     hold on
-%     [px, py] = gradient(zz, .1, .1);
-%     quiver(x,y,-px,-py,1.2, 'r'), hold on
-%     quiver(x(12),y(12),-px(12),-py(12),2, 'g')
-%     pause(1)
-%     figure(4)
-%     title('Contour plot of the environment')
-%     xlabel('x')
-%     ylabel('y')
-%     hold on
-%     contour(zz,21)
-% 
-% end
+function [pot] = potential(x, y)
+
+    global Pgoal Pobstacle katt krep d rho_obstacle
+    P = [x; y];
+    attpot = attractive_pot(P, Pgoal, katt, d);
+    reppot = repulsive_pot(P, Pobstacle, rho_obstacle, krep);
+    pot = attpot + reppot;
+
+end
+
 
